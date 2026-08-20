@@ -150,6 +150,13 @@ public enum Dependency {
             "mysql-connector-j",
             Relocation.of("mysql", "com{}mysql")
     ),
+    POSTGRESQL_DRIVER(
+            "org{}postgresql",
+            "postgresql",
+            "maven",
+            "postgresql-driver",
+            Relocation.of("postgresql", "org{}postgresql")
+    ),
     HIKARI_CP(
             "com{}zaxxer",
             "HikariCP",

@@ -101,7 +101,7 @@ public class BukkitCustomFishingPluginImpl extends BukkitCustomFishingPlugin {
                         Dependency.COMMONS_POOL_2,
                         Dependency.JEDIS,
                         Dependency.EXP4J,
-                        Dependency.MYSQL_DRIVER, Dependency.MARIADB_DRIVER,
+                        Dependency.MYSQL_DRIVER, Dependency.MARIADB_DRIVER, Dependency.POSTGRESQL_DRIVER,
                         Dependency.SQLITE_DRIVER, Dependency.SLF4J_API, Dependency.SLF4J_SIMPLE,
                         Dependency.H2_DRIVER,
                         Dependency.MONGODB_DRIVER_CORE, Dependency.MONGODB_DRIVER_SYNC, Dependency.MONGODB_DRIVER_BSON,
