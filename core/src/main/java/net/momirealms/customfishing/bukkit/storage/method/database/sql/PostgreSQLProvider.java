@@ -17,4 +17,9 @@ public class PostgreSQLProvider extends AbstractHikariDatabase {
     public StorageType getStorageType() {
         return StorageType.PostgreSQL;
     }
+
+    @Override
+    SQLDialectType getSQLDialectType() {
+        return SQLDialectType.POSTGRESQL;
+    }
 }

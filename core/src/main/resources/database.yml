@@ -60,6 +60,8 @@ PostgreSQL:
   user: 'root'
   password: 'password'
   database: 'minecraft'
+  # sslmode: disable / allow / prefer / require / verify-ca / verify-full
+  # prefer (default): try SSL first, fall back to plain if the server doesn't support it
   connection-parameters: '?sslmode=prefer'
   Pool-Settings:
     max-pool-size: 10

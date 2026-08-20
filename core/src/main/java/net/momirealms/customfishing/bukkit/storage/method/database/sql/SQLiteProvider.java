@@ -85,6 +85,11 @@ public class SQLiteProvider extends AbstractSQLDatabase {
         return StorageType.SQLite;
     }
 
+    @Override
+    SQLDialectType getSQLDialectType() {
+        return SQLDialectType.SQLITE;
+    }
+
     /**
      * Get a connection to the SQLite database.
      *
@@ -119,7 +124,7 @@ public class SQLiteProvider extends AbstractSQLDatabase {
         executor.execute(() -> {
         try (
             Connection connection = getConnection();
-            PreparedStatement statement = connection.prepareStatement(String.format(SqlConstants.SQL_SELECT_BY_UUID, getTableName("data")))
+            PreparedStatement statement = connection.prepareStatement(String.format(constants.sqlSelectByUuid(), getTableName("data")))
         ) {
             statement.setString(1, uuid.toString());
             ResultSet rs = statement.executeQuery();
@@ -158,13 +163,13 @@ public class SQLiteProvider extends AbstractSQLDatabase {
         executor.execute(() -> {
             try (
                     Connection connection = getConnection();
-                    PreparedStatement statement = connection.prepareStatement(String.format(SqlConstants.SQL_SELECT_BY_UUID, getTableName("data")))
+                    PreparedStatement statement = connection.prepareStatement(String.format(constants.sqlSelectByUuid(), getTableName("data")))
             ) {
                 statement.setString(1, uuid.toString());
                 ResultSet rs = statement.executeQuery();
                 if (rs.next()) {
                     try (
-                        PreparedStatement statement2 = connection.prepareStatement(String.format(SqlConstants.SQL_UPDATE_BY_UUID, getTableName("data")))
+                        PreparedStatement statement2 = connection.prepareStatement(String.format(constants.sqlUpdateByUuid(), getTableName("data")))
                     ) {
                         statement2.setInt(1, unlock ? 0 : getCurrentSeconds());
                         statement2.setBytes(2, plugin.getStorageManager().toBytes(playerData));
@@ -191,7 +196,7 @@ public class SQLiteProvider extends AbstractSQLDatabase {
         executor.execute(() -> {
         try (
             Connection connection = getConnection();
-            PreparedStatement statement = connection.prepareStatement(String.format(SqlConstants.SQL_UPDATE_BY_UUID, getTableName("data")))
+            PreparedStatement statement = connection.prepareStatement(String.format(constants.sqlUpdateByUuid(), getTableName("data")))
         ) {
             statement.setInt(1, unlock ? 0 : getCurrentSeconds());
             statement.setBytes(2, playerData.toBytes());
@@ -208,7 +213,7 @@ public class SQLiteProvider extends AbstractSQLDatabase {
 
     @Override
     public void updateManyPlayersData(Collection<? extends UserData> users, boolean unlock) {
-        String sql = String.format(SqlConstants.SQL_UPDATE_BY_UUID, getTableName("data"));
+        String sql = String.format(constants.sqlUpdateByUuid(), getTableName("data"));
         try (Connection connection = getConnection()) {
             connection.setAutoCommit(false);
             try (PreparedStatement statement = connection.prepareStatement(sql)) {
@@ -233,7 +238,7 @@ public class SQLiteProvider extends AbstractSQLDatabase {
     protected void insertPlayerData(UUID uuid, PlayerData playerData, boolean lock, @Nullable Connection previous) {
         try (
             Connection connection = previous == null ? getConnection() : previous;
-            PreparedStatement statement = connection.prepareStatement(String.format(SqlConstants.SQL_INSERT_DATA_BY_UUID, getTableName("data")))
+            PreparedStatement statement = connection.prepareStatement(String.format(constants.sqlInsertDataByUuid(), getTableName("data")))
         ) {
             statement.setString(1, uuid.toString());
             statement.setInt(2, lock ? getCurrentSeconds() : 0);

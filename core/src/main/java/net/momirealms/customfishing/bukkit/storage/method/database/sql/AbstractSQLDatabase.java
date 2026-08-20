@@ -37,12 +37,15 @@ import java.util.concurrent.Executor;
  * An abstract base class for SQL database implementations that handle player data storage.
  */
 public abstract class AbstractSQLDatabase extends AbstractStorage {
-
     protected String tablePrefix;
+    protected final SqlConstants constants;
 
     public AbstractSQLDatabase(BukkitCustomFishingPlugin plugin) {
         super(plugin);
+        this.constants = new SqlConstants(getSQLDialectType());
     }
+
+    abstract SQLDialectType getSQLDialectType();
 
     /**
      * Get a connection to the SQL database.
@@ -121,7 +124,7 @@ public abstract class AbstractSQLDatabase extends AbstractStorage {
         executor.execute(() -> {
             try (
                     Connection connection = getConnection();
-                    PreparedStatement statement = connection.prepareStatement(String.format(SqlConstants.SQL_SELECT_BY_UUID, getTableName("data")))
+                    PreparedStatement statement = connection.prepareStatement(String.format(constants.sqlSelectByUuid(), getTableName("data")))
             ) {
                 statement.setString(1, uuid.toString());
                 ResultSet rs = statement.executeQuery();
@@ -166,7 +169,7 @@ public abstract class AbstractSQLDatabase extends AbstractStorage {
         plugin.getScheduler().async().execute(() -> {
         try (
             Connection connection = getConnection();
-            PreparedStatement statement = connection.prepareStatement(String.format(SqlConstants.SQL_UPDATE_BY_UUID, getTableName("data")))
+            PreparedStatement statement = connection.prepareStatement(String.format(constants.sqlUpdateByUuid(), getTableName("data")))
         ) {
             statement.setInt(1, unlock ? 0 : getCurrentSeconds());
             statement.setBlob(2, new ByteArrayInputStream(playerData.toBytes()));
@@ -183,7 +186,7 @@ public abstract class AbstractSQLDatabase extends AbstractStorage {
 
     @Override
     public void updateManyPlayersData(Collection<? extends UserData> users, boolean unlock) {
-        String sql = String.format(SqlConstants.SQL_UPDATE_BY_UUID, getTableName("data"));
+        String sql = String.format(constants.sqlUpdateByUuid(), getTableName("data"));
         try (Connection connection = getConnection()) {
             connection.setAutoCommit(false);
             try (PreparedStatement statement = connection.prepareStatement(sql)) {
@@ -207,7 +210,7 @@ public abstract class AbstractSQLDatabase extends AbstractStorage {
     protected void insertPlayerData(UUID uuid, PlayerData playerData, boolean lock, @Nullable Connection previous) {
         try (
             Connection connection = previous == null ? getConnection() : previous;
-            PreparedStatement statement = connection.prepareStatement(String.format(SqlConstants.SQL_INSERT_DATA_BY_UUID, getTableName("data")))
+            PreparedStatement statement = connection.prepareStatement(String.format(constants.sqlInsertDataByUuid(), getTableName("data")))
         ) {
             statement.setString(1, uuid.toString());
             statement.setInt(2, lock ? getCurrentSeconds() : 0);
@@ -222,7 +225,7 @@ public abstract class AbstractSQLDatabase extends AbstractStorage {
     public void lockOrUnlockPlayerData(UUID uuid, boolean lock) {
         try (
             Connection connection = getConnection();
-            PreparedStatement statement = connection.prepareStatement(String.format(SqlConstants.SQL_LOCK_BY_UUID, getTableName("data")))
+            PreparedStatement statement = connection.prepareStatement(String.format(constants.sqlLockByUuid(), getTableName("data")))
         ) {
             statement.setInt(1, lock ? getCurrentSeconds() : 0);
             statement.setString(2, uuid.toString());
@@ -238,13 +241,13 @@ public abstract class AbstractSQLDatabase extends AbstractStorage {
         plugin.getScheduler().async().execute(() -> {
             try (
                 Connection connection = getConnection();
-                PreparedStatement statement = connection.prepareStatement(String.format(SqlConstants.SQL_SELECT_BY_UUID, getTableName("data")))
+                PreparedStatement statement = connection.prepareStatement(String.format(constants.sqlSelectByUuid(), getTableName("data")))
             ) {
                 statement.setString(1, uuid.toString());
                 ResultSet rs = statement.executeQuery();
                 if (rs.next()) {
                     try (
-                        PreparedStatement statement2 = connection.prepareStatement(String.format(SqlConstants.SQL_UPDATE_BY_UUID, getTableName("data")))
+                        PreparedStatement statement2 = connection.prepareStatement(String.format(constants.sqlUpdateByUuid(), getTableName("data")))
                     ) {
                         statement2.setInt(1, unlock ? 0 : getCurrentSeconds());
                         statement2.setBlob(2, new ByteArrayInputStream(plugin.getStorageManager().toBytes(playerData)));
@@ -269,7 +272,7 @@ public abstract class AbstractSQLDatabase extends AbstractStorage {
     public Set<UUID> getUniqueUsers() {
         Set<UUID> uuids = new HashSet<>();
         try (Connection connection = getConnection();
-             PreparedStatement statement = connection.prepareStatement(String.format(SqlConstants.SQL_SELECT_ALL_UUID, getTableName("data")))) {
+             PreparedStatement statement = connection.prepareStatement(String.format(constants.sqlSelectAllUuid(), getTableName("data")))) {
             try (ResultSet rs = statement.executeQuery()) {
                 while (rs.next()) {
                     UUID uuid = UUID.fromString(rs.getString("uuid"));
@@ -286,10 +289,53 @@ public abstract class AbstractSQLDatabase extends AbstractStorage {
      * Constants defining SQL statements used for database operations.
      */
     public static class SqlConstants {
-        public static final String SQL_SELECT_BY_UUID = "SELECT * FROM `%s` WHERE `uuid` = ?";
-        public static final String SQL_SELECT_ALL_UUID = "SELECT uuid FROM `%s`";
-        public static final String SQL_UPDATE_BY_UUID = "UPDATE `%s` SET `lock` = ?, `data` = ? WHERE `uuid` = ?";
-        public static final String SQL_LOCK_BY_UUID = "UPDATE `%s` SET `lock` = ? WHERE `uuid` = ?";
-        public static final String SQL_INSERT_DATA_BY_UUID = "INSERT INTO `%s`(`uuid`, `lock`, `data`) VALUES(?, ?, ?)";
+        private final SQLDialectType dialect;
+
+        public SqlConstants(SQLDialectType dialect) {
+            this.dialect = dialect;
+        }
+
+        public String sqlSelectByUuid() {
+            String q = dialect.getQuote();
+            return "SELECT * FROM " + q + "%s" + q + " WHERE " + q + "uuid" + q + " = ?";
+        }
+
+        public String sqlSelectAllUuid() {
+            String q = dialect.getQuote();
+            return "SELECT " + q + "uuid" + q + " FROM " + q + "%s" + q;
+        }
+
+        public String sqlUpdateByUuid() {
+            String q = dialect.getQuote();
+            return "UPDATE " + q + "%s" + q + " SET " + q + "lock" + q + " = ?, " + q + "data" + q + " = ? WHERE " + q + "uuid" + q + " = ?";
+        }
+
+        public String sqlLockByUuid() {
+            String q = dialect.getQuote();
+            return "UPDATE " + q + "%s" + q + " SET " + q + "lock" + q + " = ? WHERE " + q + "uuid" + q + " = ?";
+        }
+
+        public String sqlInsertDataByUuid() {
+            String q = dialect.getQuote();
+            return "INSERT INTO " + q + "%s" + q + "(" + q + "uuid" + q + ", " + q + "lock" + q + ", " + q + "data" + q + ") VALUES(?, ?, ?)";
+        }
+    }
+
+    public enum SQLDialectType {
+        SQLITE("`"),
+        POSTGRESQL("\""),
+        MYSQL("`"),
+        MARIADB("`"),
+        H2("`");
+
+        private final String quote;
+
+        SQLDialectType(final String quote) {
+            this.quote = quote;
+        }
+
+        public String getQuote() {
+            return quote;
+        }
     }
 }

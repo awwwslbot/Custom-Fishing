@@ -30,4 +30,9 @@ public class MySQLProvider extends AbstractHikariDatabase {
     public StorageType getStorageType() {
         return StorageType.MySQL;
     }
+
+    @Override
+    SQLDialectType getSQLDialectType() {
+        return SQLDialectType.MYSQL;
+    }
 }

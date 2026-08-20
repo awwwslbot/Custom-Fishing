@@ -30,4 +30,9 @@ public class MariaDBProvider extends AbstractHikariDatabase {
     public StorageType getStorageType() {
         return StorageType.MariaDB;
     }
+
+    @Override
+    SQLDialectType getSQLDialectType() {
+        return SQLDialectType.MARIADB;
+    }
 }

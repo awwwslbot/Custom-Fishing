@@ -80,6 +80,11 @@ public class H2Provider extends AbstractSQLDatabase {
     }
 
     @Override
+    SQLDialectType getSQLDialectType() {
+        return SQLDialectType.H2;
+    }
+
+    @Override
     public Connection getConnection() {
         try {
             return (Connection) getConnectionMethod.invoke(connectionPool);
