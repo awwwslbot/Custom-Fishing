@@ -40,6 +40,7 @@ dependencies {
     compileOnly("org.mongodb:mongodb-driver-sync:${rootProject.properties["mongodb_driver_version"]}")
     compileOnly("com.zaxxer:HikariCP:${rootProject.properties["hikari_version"]}")
     compileOnly("redis.clients:jedis:${rootProject.properties["jedis_version"]}")
+    compileOnly("org.postgresql:postgresql:${rootProject.properties["postgresql_driver_version"]}")
     // cloud command framework
     compileOnly("org.incendo:cloud-core:${rootProject.properties["cloud_core_version"]}")
     compileOnly("org.incendo:cloud-minecraft-extras:${rootProject.properties["cloud_minecraft_extras_version"]}")
@@ -63,6 +64,7 @@ tasks {
         relocate("dev.dejvokep", "net.momirealms.customfishing.libraries")
         relocate("org.apache.commons.pool2", "net.momirealms.customfishing.libraries.commonspool2")
         relocate("com.mysql", "net.momirealms.customfishing.libraries.mysql")
+        relocate("org.postgresql", "net.momirealms.customfishing.libraries.postgresql")
         relocate("org.mariadb", "net.momirealms.customfishing.libraries.mariadb")
         relocate("com.zaxxer.hikari", "net.momirealms.customfishing.libraries.hikari")
         relocate("com.mongodb", "net.momirealms.customfishing.libraries.mongodb")

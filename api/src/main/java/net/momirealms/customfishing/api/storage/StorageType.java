@@ -23,7 +23,8 @@ public enum StorageType {
     H2,
     SQLite,
     MySQL,
+    PostgreSQL,
     MariaDB,
     MongoDB,
-    Redis
+    Redis,
 }

@@ -26,9 +26,7 @@ import net.momirealms.customfishing.api.storage.StorageType;
 
 import java.sql.Connection;
 import java.sql.SQLException;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Properties;
+import java.util.*;
 
 public abstract class AbstractHikariDatabase extends AbstractSQLDatabase {
 
@@ -38,21 +36,51 @@ public abstract class AbstractHikariDatabase extends AbstractSQLDatabase {
 
     public AbstractHikariDatabase(BukkitCustomFishingPlugin plugin) {
         super(plugin);
-        this.driverClass = getStorageType() == StorageType.MariaDB ? "org.mariadb.jdbc.Driver" : "com.mysql.cj.jdbc.Driver";
-        this.sqlBrand = getStorageType() == StorageType.MariaDB ? "MariaDB" : "MySQL";
-        try {
-            Class.forName(this.driverClass);
-        } catch (ClassNotFoundException e1) {
-            if (getStorageType() == StorageType.MariaDB) {
-                plugin.getPluginLogger().warn("No MariaDB driver is found");
-            } else if (getStorageType() == StorageType.MySQL) {
-                try {
-                    Class.forName("com.mysql.jdbc.Driver");
-                } catch (ClassNotFoundException e2) {
-                    plugin.getPluginLogger().warn("No MySQL driver is found");
-                }
+        final var driverClasses = Objects.requireNonNull(driverClass(getStorageType()));
+        sqlBrand = Objects.requireNonNull(sqlBrand(getStorageType()));
+        String finalClazz = null;
+        for (String clazz : driverClasses) {
+            try {
+                Class.forName(clazz);
+                finalClazz = clazz;
+                break;
+            } catch (ClassNotFoundException e) {
+                plugin.getPluginLogger().info("Driver class " + clazz + " not found.");
             }
         }
+        if(finalClazz == null) {
+            plugin.getPluginLogger().warn("No" + sqlBrand + "driver is found" );
+        }
+        driverClass = finalClazz;
+    }
+
+    private static List<String> driverClass(final StorageType storageType) {
+        switch(storageType) {
+            case MariaDB -> {
+                return List.of("org.mariadb.jdbc.Driver");
+            }
+            case MySQL -> {
+                return List.of("com.mysql.cj.jdbc.Driver", "com.mysql.jdbc.Driver");
+            }
+            case PostgreSQL -> {
+                return List.of("org.postgresql.Driver");
+            }
+        }
+        return null;
+    }
+    private static String sqlBrand(final StorageType storageType) {
+        switch (storageType) {
+            case MariaDB -> {
+                return "MariaDB";
+            }
+            case MySQL -> {
+                return "MySQL";
+            }
+            case PostgreSQL -> {
+                return "PostgreSQL";
+            }
+        }
+        return null;
     }
 
     @Override

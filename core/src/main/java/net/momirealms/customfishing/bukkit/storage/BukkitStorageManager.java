@@ -28,10 +28,7 @@ import net.momirealms.customfishing.api.storage.data.PlayerData;
 import net.momirealms.customfishing.api.storage.user.UserData;
 import net.momirealms.customfishing.bukkit.storage.method.database.nosql.MongoDBProvider;
 import net.momirealms.customfishing.bukkit.storage.method.database.nosql.RedisManager;
-import net.momirealms.customfishing.bukkit.storage.method.database.sql.H2Provider;
-import net.momirealms.customfishing.bukkit.storage.method.database.sql.MariaDBProvider;
-import net.momirealms.customfishing.bukkit.storage.method.database.sql.MySQLProvider;
-import net.momirealms.customfishing.bukkit.storage.method.database.sql.SQLiteProvider;
+import net.momirealms.customfishing.bukkit.storage.method.database.sql.*;
 import net.momirealms.customfishing.bukkit.storage.method.file.JsonProvider;
 import net.momirealms.customfishing.bukkit.storage.method.file.YAMLProvider;
 import net.momirealms.customfishing.common.helper.GsonHelper;
@@ -96,11 +93,16 @@ public class BukkitStorageManager implements StorageManager, Listener {
                 case YAML -> this.dataSource = new YAMLProvider(plugin);
                 case SQLite -> this.dataSource = new SQLiteProvider(plugin);
                 case MySQL -> this.dataSource = new MySQLProvider(plugin);
+                case PostgreSQL -> this.dataSource = new PostgreSQLProvider(plugin);
                 case MariaDB -> this.dataSource = new MariaDBProvider(plugin);
                 case MongoDB -> this.dataSource = new MongoDBProvider(plugin);
             }
-            if (this.dataSource != null) this.dataSource.initialize(config);
-            else plugin.getPluginLogger().severe("No storage type is set.");
+            if (this.dataSource != null) {
+                this.dataSource.initialize(config);
+                plugin.getPluginLogger().info("Storage type initialized: " + storageType);
+            } else {
+                plugin.getPluginLogger().severe("No storage type is set.");
+            }
         }
 
         // Handle Redis configuration
