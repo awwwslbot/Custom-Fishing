@@ -25,7 +25,6 @@ import org.bukkit.Bukkit;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.sql.*;
@@ -129,9 +128,7 @@ public abstract class AbstractSQLDatabase extends AbstractStorage {
                 statement.setString(1, uuid.toString());
                 ResultSet rs = statement.executeQuery();
                 if (rs.next()) {
-                    final Blob blob = rs.getBlob("data");
-                    final byte[] dataByteArray = blob.getBytes(1, (int) blob.length());
-                    blob.free();
+                    final byte[] dataByteArray = rs.getBytes("data");
                     PlayerData data = plugin.getStorageManager().fromBytes(dataByteArray);
                     data.uuid(uuid);
                     if (lock) {
@@ -172,7 +169,7 @@ public abstract class AbstractSQLDatabase extends AbstractStorage {
             PreparedStatement statement = connection.prepareStatement(String.format(constants.sqlUpdateByUuid(), getTableName("data")))
         ) {
             statement.setInt(1, unlock ? 0 : getCurrentSeconds());
-            statement.setBlob(2, new ByteArrayInputStream(playerData.toBytes()));
+            statement.setBytes(2, playerData.toBytes());
             statement.setString(3, uuid.toString());
             statement.executeUpdate();
             future.complete(true);
@@ -192,7 +189,7 @@ public abstract class AbstractSQLDatabase extends AbstractStorage {
             try (PreparedStatement statement = connection.prepareStatement(sql)) {
                 for (UserData user : users) {
                     statement.setInt(1, unlock ? 0 : getCurrentSeconds());
-                    statement.setBlob(2, new ByteArrayInputStream(plugin.getStorageManager().toBytes(user.toPlayerData())));
+                    statement.setBytes(2, plugin.getStorageManager().toBytes(user.toPlayerData()));
                     statement.setString(3, user.uuid().toString());
                     statement.addBatch();
                 }
@@ -214,7 +211,7 @@ public abstract class AbstractSQLDatabase extends AbstractStorage {
         ) {
             statement.setString(1, uuid.toString());
             statement.setInt(2, lock ? getCurrentSeconds() : 0);
-            statement.setBlob(3, new ByteArrayInputStream(plugin.getStorageManager().toBytes(playerData)));
+            statement.setBytes(3, plugin.getStorageManager().toBytes(playerData));
             statement.execute();
         } catch (SQLException e) {
             plugin.getPluginLogger().warn("Failed to insert " + uuid + "'s data.", e);
@@ -250,7 +247,7 @@ public abstract class AbstractSQLDatabase extends AbstractStorage {
                         PreparedStatement statement2 = connection.prepareStatement(String.format(constants.sqlUpdateByUuid(), getTableName("data")))
                     ) {
                         statement2.setInt(1, unlock ? 0 : getCurrentSeconds());
-                        statement2.setBlob(2, new ByteArrayInputStream(plugin.getStorageManager().toBytes(playerData)));
+                        statement2.setBytes(2, plugin.getStorageManager().toBytes(playerData));
                         statement2.setString(3, uuid.toString());
                         statement2.executeUpdate();
                     } catch (SQLException e) {
