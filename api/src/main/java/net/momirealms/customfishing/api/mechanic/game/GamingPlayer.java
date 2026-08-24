@@ -18,6 +18,7 @@
 package net.momirealms.customfishing.api.mechanic.game;
 
 import org.bukkit.entity.Player;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Represents a gaming player.
@@ -32,11 +33,20 @@ public interface GamingPlayer {
     boolean isValid();
 
     /**
-     * Sets the game result
+     * Forces the game result
      *
      * @param result result, true for success, false for failure
+     * @deprecated Use {@link #forceGameResult(GameResult)} instead.
      */
-    void setGameResult(Boolean result);
+    @Deprecated
+    void forceGameResult(boolean result);
+
+    /**
+     * Forces the game result
+     *
+     * @param result the game result, or null to clear the forced game result.
+     */
+    void forceGameResult(@Nullable GameResult result);
 
     /**
      * Gets the current game settings
@@ -56,11 +66,11 @@ public interface GamingPlayer {
     void cancel();
 
     /**
-     * Checks if the gaming player has successfully completed the game.
+     * Gets the game result
      *
-     * @return true if successful, false otherwise.
+     * @return the game result. or null indicating the game is not finished yet.
      */
-    boolean isSuccessful();
+    @Nullable GameResult result();
 
     /**
      * Handles left-click actions.

@@ -247,6 +247,11 @@ public class BukkitGameManager implements GameManager {
                             showUI();
                         }
 
+                        @Override
+                        public void handleRightClick() {
+                            endGame();
+                        }
+
                         private void burst() {
                             if (Math.random() < (judgement_position / barEffectiveWidth)) {
                                 judgement_velocity = -1 - 0.8 * Math.random() * (settings.difficulty() / 15);
@@ -385,7 +390,7 @@ public class BukkitGameManager implements GameManager {
                                 endGame();
                                 return;
                             }
-                            hold_time = Math.max(0, Math.min(hold_time, time_requirement));
+                            hold_time = Math.clamp(hold_time, 0, time_requirement);
                             showUI();
                         }
 
@@ -693,6 +698,14 @@ public class BukkitGameManager implements GameManager {
                             showUI();
                         }
 
+                        /**
+                         * Handles right-click actions.
+                         */
+                        @Override
+                        public void handleRightClick() {
+                            endGame();
+                        }
+
                         private void pull() {
                             played = true;
                             if (struggling_time > 0) {
@@ -976,12 +989,18 @@ public class BukkitGameManager implements GameManager {
                             showUI();
                         }
 
+                        /**
+                         * Handles right-click actions.
+                         */
                         @Override
-                        public boolean isSuccessful() {
-                            if (forcedGameResult != null) return forcedGameResult;
-                            if (isTimeOut) return false;
+                        public void handleRightClick() {
                             int last = progress / widthPerSection;
-                            return (Math.random() < successRate[last]);
+                            if(Math.random() < successRate[last]) {
+                                setGameResult(new GameResult(GameResultType.SUCCESS));
+                            } else {
+                                setGameResult(new GameResult(GameResultType.GAME_FAILED));
+                            }
+                            endGame();
                         }
 
                         private void showUI() {
@@ -1021,12 +1040,12 @@ public class BukkitGameManager implements GameManager {
 
                     return (customFishingHook, gameSetting) -> new AbstractGamingPlayer(customFishingHook, gameSetting) {
                         private final int totalWidth = RandomUtils.generateRandomInt(minWidth, maxWidth);
+
                         private final int successWidth = RandomUtils.generateRandomInt(minSuccess, maxSuccess);
                         private final int successPosition = ThreadLocalRandom.current().nextInt((totalWidth - successWidth + 1)) + 1;
                         private int currentIndex = 0;
                         private int timer = 0;
                         private boolean face = true;
-
                         @Override
                         protected void tick() {
                             timer++;
@@ -1034,6 +1053,19 @@ public class BukkitGameManager implements GameManager {
                                 movePointer();
                             }
                             showUI();
+                        }
+
+                        /**
+                         * Handles right-click actions.
+                         */
+                        @Override
+                        public void handleRightClick() {
+                            if(currentIndex + 1 <= successPosition + successWidth - 1 && currentIndex + 1 >= successPosition) {
+                                setGameResult(new GameResult(GameResultType.SUCCESS));
+                            } else {
+                                setGameResult(new GameResult(GameResultType.GAME_FAILED));
+                            }
+                            endGame();
                         }
 
                         private void movePointer() {
@@ -1066,13 +1098,6 @@ public class BukkitGameManager implements GameManager {
 
                             SparrowHeart.getInstance().sendTitle(getPlayer(), AdventureHelper.miniMessageToJson(left + stringBuilder + right), AdventureHelper.miniMessageToJson(subtitle), 0, 20, 0);
                         }
-
-                        @Override
-                        public boolean isSuccessful() {
-                            if (forcedGameResult != null) return forcedGameResult;
-                            if (isTimeOut) return false;
-                            return currentIndex + 1 <= successPosition + successWidth - 1 && currentIndex + 1 >= successPosition;
-                        }
                     };
                 }
             };
@@ -1102,13 +1127,13 @@ public class BukkitGameManager implements GameManager {
                     return (customFishingHook, gameSetting) -> new AbstractGamingPlayer(customFishingHook, gameSetting) {
 
                         private static final int MIN_VALUE = 1;
-                        private static final int MAX_VALUE = 100;
 
+                        private static final int MAX_VALUE = 100;
                         private int progress = -1;
+
                         private boolean face = true;
                         private final int judgement_position = RandomUtils.generateRandomInt(0, barEffectiveWidth - judgementAreaWidth);
                         private final TextValue<Player> title = TextValue.auto(titles.get(RandomUtils.generateRandomInt(0, titles.size() - 1)));
-
                         private long mapValueToIntervalMicroseconds(int value) {
                             double frequency = minSpeed + ((double) (value - MIN_VALUE) / (MAX_VALUE - MIN_VALUE)) * (maxSpeed - minSpeed);
                             return (long) (1_000_000 / frequency);
@@ -1118,6 +1143,19 @@ public class BukkitGameManager implements GameManager {
                         public void arrangeTask() {
                             long period = mapValueToIntervalMicroseconds((int) settings.difficulty());
                             this.task = plugin.getScheduler().asyncRepeating(this, period, period, TimeUnit.MICROSECONDS);
+                        }
+
+                        /**
+                         * Handles right-click actions.
+                         */
+                        @Override
+                        public void handleRightClick() {
+                            if(progress < judgement_position + judgementAreaWidth && progress >= judgement_position) {
+                                setGameResult(new GameResult(GameResultType.SUCCESS));
+                            } else {
+                                setGameResult(new GameResult(GameResultType.GAME_FAILED));
+                            }
+                            endGame();
                         }
 
                         @Override
@@ -1145,13 +1183,6 @@ public class BukkitGameManager implements GameManager {
                                     + AdventureHelper.surroundWithMiniMessageFont(pointerImage, font)
                                     + OffsetUtils.getOffsetChars(barEffectiveWidth - progress - pointerIconWidth + 1);
                             SparrowHeart.getInstance().sendTitle(getPlayer(), AdventureHelper.miniMessageToJson(title.render(hook.getContext())), AdventureHelper.miniMessageToJson(bar), 0, 20, 0);
-                        }
-
-                        @Override
-                        public boolean isSuccessful() {
-                            if (forcedGameResult != null) return forcedGameResult;
-                            if (isTimeOut) return false;
-                            return progress < judgement_position + judgementAreaWidth && progress >= judgement_position;
                         }
                     };
                 }

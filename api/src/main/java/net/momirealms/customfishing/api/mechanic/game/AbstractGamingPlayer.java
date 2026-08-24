@@ -23,6 +23,7 @@ import net.momirealms.customfishing.api.mechanic.fishing.CustomFishingHook;
 import net.momirealms.customfishing.common.plugin.scheduler.SchedulerTask;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.ApiStatus;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.concurrent.TimeUnit;
 
@@ -32,17 +33,33 @@ import java.util.concurrent.TimeUnit;
  */
 public abstract class AbstractGamingPlayer implements GamingPlayer, Runnable {
     protected long deadline;
-    protected boolean success;
+    protected @Nullable GameResult result;
     protected SchedulerTask task;
     protected GameSetting settings;
     protected CustomFishingHook hook;
-    protected boolean isTimeOut;
     private boolean valid = true;
     private boolean firstFlag = true;
-    protected Boolean forcedGameResult;
+    protected @Nullable GameResult forcedGameResult;
 
+    /**
+     * Sets the game result
+     *
+     * @param forcedGameResult result, true for success, false for failure
+     * @deprecated Use {@link #forceGameResult(GameResult)} instead.
+     */
+    @Deprecated
     @Override
-    public void setGameResult(Boolean forcedGameResult) {
+    public void forceGameResult(boolean forcedGameResult) {
+        this.forcedGameResult = new GameResult(forcedGameResult ? GameResultType.SUCCESS : GameResultType.FORCE_FAILURE);
+    }
+
+    /**
+     * Forces the game result
+     *
+     * @param forcedGameResult the game result, or null to clear the forced game result.
+     */
+    @Override
+    public void forceGameResult(@Nullable GameResult forcedGameResult) {
         this.forcedGameResult = forcedGameResult;
     }
 
@@ -88,15 +105,9 @@ public abstract class AbstractGamingPlayer implements GamingPlayer, Runnable {
         destroy();
     }
 
-    /**
-     * Checks if the gaming player has successfully completed the game.
-     *
-     * @return true if successful, false otherwise.
-     */
     @Override
-    public boolean isSuccessful() {
-        if (forcedGameResult != null) return forcedGameResult;
-        return success;
+    public @Nullable GameResult result() {
+        return result;
     }
 
     /**
@@ -104,16 +115,9 @@ public abstract class AbstractGamingPlayer implements GamingPlayer, Runnable {
      */
     @ApiStatus.Internal
     public void internalRightClick() {
+        if(!isValid()) return;
         firstFlag = true;
         handleRightClick();
-    }
-
-    /**
-     * Handles right-click actions.
-     */
-    @Override
-    public void handleRightClick() {
-        endGame();
     }
 
     /**
@@ -123,6 +127,7 @@ public abstract class AbstractGamingPlayer implements GamingPlayer, Runnable {
      */
     @ApiStatus.Internal
     public boolean internalLeftClick() {
+        if(!isValid()) return false;
         if (firstFlag) {
             firstFlag = false;
             return false;
@@ -221,9 +226,13 @@ public abstract class AbstractGamingPlayer implements GamingPlayer, Runnable {
     public void endGame() {
         if (!isValid()) return;
         destroy();
-        boolean success = isSuccessful();
+        var result = forcedGameResult != null
+                ? forcedGameResult
+                : result() == null
+                    ? new GameResult(GameResultType.TIMEOUT_FAILURE)
+                    : result();
         BukkitCustomFishingPlugin.getInstance().getScheduler().sync().run(() -> {
-            if (success) {
+            if (result != null && result.isSuccess()) {
                 hook.handleSuccessfulFishing();
             } else {
                 hook.handleFailedFishing();
@@ -237,8 +246,13 @@ public abstract class AbstractGamingPlayer implements GamingPlayer, Runnable {
      *
      * @param success true if the game was successful, false otherwise.
      */
+    @Deprecated
     protected void setGameResult(boolean success) {
-        this.success = success;
+        this.result = new GameResult(success ? GameResultType.SUCCESS : GameResultType.GAME_FAILED);
+    }
+
+    protected void setGameResult(GameResult result) {
+        this.result = result;
     }
 
     /**
@@ -249,7 +263,7 @@ public abstract class AbstractGamingPlayer implements GamingPlayer, Runnable {
     protected boolean timeOutCheck() {
         long delta = deadline - System.currentTimeMillis();
         if (delta <= 0) {
-            isTimeOut = true;
+            setGameResult(new GameResult(GameResultType.TIMEOUT_FAILURE));
             endGame();
             return true;
         }
