@@ -165,6 +165,7 @@ public class BukkitRequirementManager implements RequirementManager<Player> {
 
     private void registerBuiltInRequirements() {
         this.registerFirstCaptureRequirement();
+        this.registerPerfectCatchRequirement();
         this.registerTimeRequirement();
         this.registerYRequirement();
         this.registerInWaterRequirement();
@@ -469,6 +470,27 @@ public class BukkitRequirementManager implements RequirementManager<Player> {
                 return false;
             };
         }, "first-capture");
+    }
+
+    /**
+     * Matches on whether the minigame was cleared without a single miss.
+     * <p>
+     * Only meaningful once the minigame has ended: {@link ContextKeys#PERFECT_CATCH}
+     * is written by {@code AbstractGamingPlayer#endGame()} right before the success
+     * actions run. Loot is picked back when the fish bites, so a {@code perfect-catch}
+     * condition placed in {@code loot-conditions.yml} would always see an unset value.
+     */
+    private void registerPerfectCatchRequirement() {
+        registerRequirement((args, actions, runActions) -> {
+            boolean required = (boolean) args;
+            return context -> {
+                Boolean arg = context.arg(ContextKeys.PERFECT_CATCH);
+                boolean perfect = arg != null && arg;
+                if (perfect == required) return true;
+                if (runActions) ActionManager.trigger(context, actions);
+                return false;
+            };
+        }, "perfect-catch");
     }
 
     private void registerInWaterRequirement() {
