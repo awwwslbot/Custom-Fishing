@@ -71,7 +71,9 @@ public class CustomFishingHook {
     private Effect tempFinalEffect;
     private HookMechanic hookMechanic;
     private Loot nextLoot;
-    private GamingPlayer gamingPlayer;
+    // volatile: a pre-game animation hands the real minigame over from its own
+    // async ticker, while input handlers read this from the main thread.
+    private volatile GamingPlayer gamingPlayer;
     private BaitAnimationTask baitAnimationTask;
     private boolean valid = true;
 
@@ -359,6 +361,20 @@ public class CustomFishingHook {
      */
     public Optional<GamingPlayer> getGamingPlayer() {
         return Optional.ofNullable(gamingPlayer);
+    }
+
+    /**
+     * Replaces the gaming player without going through {@link #gameStart()}.
+     * <p>
+     * Used to hand over from a pre-game animation to the minigame it precedes,
+     * which {@link #gameStart()} cannot do because {@link #isPlayingGame()} is
+     * already true by then.
+     *
+     * @param gamingPlayer the new gaming player.
+     */
+    @ApiStatus.Internal
+    public void setGamingPlayer(GamingPlayer gamingPlayer) {
+        this.gamingPlayer = gamingPlayer;
     }
 
     // auto fishing

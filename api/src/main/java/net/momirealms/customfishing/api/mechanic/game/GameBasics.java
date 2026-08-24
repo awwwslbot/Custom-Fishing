@@ -22,6 +22,7 @@ import net.momirealms.customfishing.api.mechanic.effect.Effect;
 import net.momirealms.customfishing.api.mechanic.misc.value.MathValue;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Represents the basic settings for a game.
@@ -41,6 +42,13 @@ public interface GameBasics {
      * @return the minimum difficulty level.
      */
     MathValue<Player> difficulty();
+
+    /**
+     * Gets the animation played before the game starts.
+     *
+     * @return the animation, or null if the game starts immediately.
+     */
+    @Nullable PreGameAnimation preGameAnimation();
 
     /**
      * Creates a new builder for constructing {@link GameBasics} instances.
@@ -80,6 +88,14 @@ public interface GameBasics {
          * @return the current {@link Builder} instance.
          */
         Builder time(MathValue<Player> value);
+
+        /**
+         * Sets the animation played before the game starts.
+         *
+         * @param value the animation, or null for none.
+         * @return the current {@link Builder} instance.
+         */
+        Builder preGameAnimation(@Nullable PreGameAnimation value);
 
         /**
          * Builds and returns the {@link GameBasics} instance.
