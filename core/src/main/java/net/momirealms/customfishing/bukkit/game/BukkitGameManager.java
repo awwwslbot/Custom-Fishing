@@ -66,6 +66,7 @@ public class BukkitGameManager implements GameManager {
         this.registerAccurateClickGame();
         this.registerAccurateClickV2Game();
         this.registerAccurateClickV3Game();
+        this.registerStardewHoldGame();
     }
 
     @Override
@@ -203,6 +204,7 @@ public class BukkitGameManager implements GameManager {
                     return (customFishingHook, gameSetting) -> new AbstractGamingPlayer(customFishingHook, gameSetting) {
 
                         private double hold_time;
+                        private boolean perfectHold = true;
                         private double judgement_position;
                         private double fish_position;
                         private double judgement_velocity;
@@ -237,13 +239,15 @@ public class BukkitGameManager implements GameManager {
                                 hold_time += 33;
                             } else {
                                 hold_time -= punishment * 33;
+                                perfectHold = false;
                             }
                             if (hold_time >= time_requirement) {
-                                setGameResult(true);
+                                // TODO: add score
+                                setGameResult(perfectHold ? GameResult.perfect() : GameResult.success());
                                 endGame();
                                 return;
                             }
-                            hold_time = Math.max(0, Math.min(hold_time, time_requirement));
+                            hold_time = Math.clamp(hold_time, 0, time_requirement);
                             showUI();
                         }
 
@@ -352,6 +356,7 @@ public class BukkitGameManager implements GameManager {
                 public BiFunction<CustomFishingHook, GameSetting, AbstractGamingPlayer> gamingPlayerProvider() {
                     return (customFishingHook, gameSetting) -> new AbstractGamingPlayer(customFishingHook, gameSetting) {
                         private double hold_time;
+                        private boolean perfectHold = true;
                         private double judgement_position;
                         private double fish_position;
                         private double judgement_velocity;
@@ -384,9 +389,11 @@ public class BukkitGameManager implements GameManager {
                                 hold_time += 33;
                             } else {
                                 hold_time -= punishment * 33;
+                                perfectHold = false;
                             }
                             if (hold_time >= time_requirement) {
-                                setGameResult(true);
+                                // TODO: add score
+                                setGameResult(perfectHold ? GameResult.perfect() : GameResult.success());
                                 endGame();
                                 return;
                             }
@@ -996,9 +1003,9 @@ public class BukkitGameManager implements GameManager {
                         public void handleRightClick() {
                             int last = progress / widthPerSection;
                             if(Math.random() < successRate[last]) {
-                                setGameResult(new GameResult(GameResultType.SUCCESS));
+                                setGameResult(GameResult.success());
                             } else {
-                                setGameResult(new GameResult(GameResultType.GAME_FAILED));
+                                setGameResult(GameResult.gameFailure());
                             }
                             endGame();
                         }
@@ -1061,9 +1068,9 @@ public class BukkitGameManager implements GameManager {
                         @Override
                         public void handleRightClick() {
                             if(currentIndex + 1 <= successPosition + successWidth - 1 && currentIndex + 1 >= successPosition) {
-                                setGameResult(new GameResult(GameResultType.SUCCESS));
+                                setGameResult(GameResult.success());
                             } else {
-                                setGameResult(new GameResult(GameResultType.GAME_FAILED));
+                                setGameResult(GameResult.gameFailure());
                             }
                             endGame();
                         }
@@ -1151,9 +1158,9 @@ public class BukkitGameManager implements GameManager {
                         @Override
                         public void handleRightClick() {
                             if(progress < judgement_position + judgementAreaWidth && progress >= judgement_position) {
-                                setGameResult(new GameResult(GameResultType.SUCCESS));
+                                setGameResult(GameResult.success());
                             } else {
-                                setGameResult(new GameResult(GameResultType.GAME_FAILED));
+                                setGameResult(GameResult.gameFailure());
                             }
                             endGame();
                         }
@@ -1183,6 +1190,59 @@ public class BukkitGameManager implements GameManager {
                                     + AdventureHelper.surroundWithMiniMessageFont(pointerImage, font)
                                     + OffsetUtils.getOffsetChars(barEffectiveWidth - progress - pointerIconWidth + 1);
                             SparrowHeart.getInstance().sendTitle(getPlayer(), AdventureHelper.miniMessageToJson(title.render(hook.getContext())), AdventureHelper.miniMessageToJson(bar), 0, 20, 0);
+                        }
+                    };
+                }
+            };
+        }));
+    }
+
+    private void registerStardewHoldGame() {
+        this.registerGameType("stardew_hold", ((id, section) -> {
+            GameBasics basics = getGameBasics(section);
+            return new AbstractGame(id, basics) {
+                private final String font = section.getString("subtitle.font");
+                private final String barImage = section.getString("subtitle.bar");
+                private final String judgementAreaImage = section.getString("subtitle.judgement-area");
+                private final String indicatorImage = section.getString("subtitle.fish-indicator");
+                private final int barImageWidth = section.getInt("subtitle.bar-width");
+                private final int barImageOffset = section.getInt("subtitle.bar-offset");
+                private final int judgementAreaWidth = section.getInt("subtitle.judgement-area-width");
+                private final int judgementAreaOffset = section.getInt("subtitle.judgement-area-offset");
+                private final int indicatorImageWidth = section.getInt("subtitle.fish-indicator-width");
+                private final int indicatorImageOffset = section.getInt("subtitle.fish-indicator-offset");
+
+                private final int indicatorHeight = section.getInt("arguments.indicator-height");
+                private final int barEffectiveHeight = section.getInt("arguments.bar-height");
+                private final int judgementAreaHeight = section.getInt("arguments.judgment-area-height");
+                @Override
+                public BiFunction<CustomFishingHook, GameSetting, AbstractGamingPlayer> gamingPlayerProvider() {
+                    return (hook, settings) -> new AbstractGamingPlayer(hook, settings) {
+                        private int tick = 0;
+                        @Override
+                        protected void tick() {
+                            tick++;
+                            if(tick > 100) {
+                                setGameResult(GameResult.success());
+                                endGame();
+                                return;
+                            }
+                            showUI();
+                        }
+
+                        @Override
+                        public void handleRightClick() {
+
+                        }
+
+                        private void showUI() {
+                            String bar = OffsetUtils.getOffsetChars(barImageOffset)
+                                    + AdventureHelper.surroundWithMiniMessageFont(barImage, font)
+                                    + OffsetUtils.getOffsetChars(judgementAreaOffset - barImageWidth - barImageOffset)
+                                    + AdventureHelper.surroundWithMiniMessageFont(judgementAreaImage, font)
+                                    + OffsetUtils.getOffsetChars(indicatorImageOffset - judgementAreaWidth - judgementAreaOffset)
+                                    + AdventureHelper.surroundWithMiniMessageFont(indicatorImage, font);
+                            SparrowHeart.getInstance().sendTitle(getPlayer(), null, AdventureHelper.miniMessageToJson(bar), 0, 20, 0);
                         }
                     };
                 }

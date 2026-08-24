@@ -98,6 +98,7 @@ public class ContextKeys<T> {
     public static final ContextKeys<Integer> LOOT_ORDER = of("loot_order", Integer.class);
     public static final ContextKeys<Effect> EFFECT = of("effect", Effect.class);
     public static final ContextKeys<Boolean> FIRST_CAPTURE = of("first_capture", Boolean.class);
+    public static final ContextKeys<Boolean> PERFECT_CATCH = of("perfect_catch", Boolean.class);
 
     private final String key;
     private final Class<T> type;

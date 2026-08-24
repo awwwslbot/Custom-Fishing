@@ -50,7 +50,7 @@ public abstract class AbstractGamingPlayer implements GamingPlayer, Runnable {
     @Deprecated
     @Override
     public void forceGameResult(boolean forcedGameResult) {
-        this.forcedGameResult = new GameResult(forcedGameResult ? GameResultType.SUCCESS : GameResultType.FORCE_FAILURE);
+        this.forcedGameResult =  forcedGameResult ? GameResult.success() : GameResult.forceFailure();
     }
 
     /**
@@ -229,10 +229,13 @@ public abstract class AbstractGamingPlayer implements GamingPlayer, Runnable {
         var result = forcedGameResult != null
                 ? forcedGameResult
                 : result() == null
-                    ? new GameResult(GameResultType.TIMEOUT_FAILURE)
+                    ? GameResult.timeout()
                     : result();
         BukkitCustomFishingPlugin.getInstance().getScheduler().sync().run(() -> {
             if (result != null && result.isSuccess()) {
+                if(result.isPerfect()) {
+                    hook.getContext().arg(ContextKeys.PERFECT_CATCH, true);
+                }
                 hook.handleSuccessfulFishing();
             } else {
                 hook.handleFailedFishing();
@@ -248,7 +251,7 @@ public abstract class AbstractGamingPlayer implements GamingPlayer, Runnable {
      */
     @Deprecated
     protected void setGameResult(boolean success) {
-        this.result = new GameResult(success ? GameResultType.SUCCESS : GameResultType.GAME_FAILED);
+        this.result = success ? GameResult.success() : GameResult.gameFailure();
     }
 
     protected void setGameResult(GameResult result) {
@@ -263,7 +266,7 @@ public abstract class AbstractGamingPlayer implements GamingPlayer, Runnable {
     protected boolean timeOutCheck() {
         long delta = deadline - System.currentTimeMillis();
         if (delta <= 0) {
-            setGameResult(new GameResult(GameResultType.TIMEOUT_FAILURE));
+            setGameResult(GameResult.gameFailure());
             endGame();
             return true;
         }
