@@ -72,15 +72,7 @@ public abstract class AbstractGame implements Game {
         GameSetting setting = this.basics.toGameSetting(hook.getContext(), effect);
         FishingGamePreStartEvent event = new FishingGamePreStartEvent(hook, setting);
         EventUtils.fireAndForget(event);
-        GameSetting finalSetting = event.setting();
-        PreGameAnimation animation = this.basics.preGameAnimation();
-        if (animation == null) {
-            return gamingPlayerProvider().apply(hook, finalSetting);
-        }
-        // The real game is only built once the animation is over, so its countdown
-        // starts from the first frame the player can actually act on.
-        return new PreGameAnimationPlayer(hook, finalSetting, animation,
-                () -> gamingPlayerProvider().apply(hook, finalSetting));
+        return gamingPlayerProvider().apply(hook, event.setting());
     }
 
     /**

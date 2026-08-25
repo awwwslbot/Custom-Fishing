@@ -22,15 +22,12 @@ import net.momirealms.customfishing.api.mechanic.effect.Effect;
 import net.momirealms.customfishing.api.mechanic.misc.value.MathValue;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
-public record GameBasicsImpl(MathValue<Player> time, MathValue<Player> difficulty,
-                             @Nullable PreGameAnimation preGameAnimation) implements GameBasics {
+public record GameBasicsImpl(MathValue<Player> time, MathValue<Player> difficulty) implements GameBasics {
 
     public static class BuilderImpl implements Builder {
         private MathValue<Player> time;
         private MathValue<Player> difficulty;
-        private PreGameAnimation preGameAnimation;
 
         @Override
         public Builder difficulty(MathValue<Player> value) {
@@ -45,14 +42,8 @@ public record GameBasicsImpl(MathValue<Player> time, MathValue<Player> difficult
         }
 
         @Override
-        public Builder preGameAnimation(@Nullable PreGameAnimation value) {
-            this.preGameAnimation = value;
-            return this;
-        }
-
-        @Override
         public GameBasics build() {
-            return new GameBasicsImpl(time, difficulty, preGameAnimation);
+            return new GameBasicsImpl(time, difficulty);
         }
     }
 

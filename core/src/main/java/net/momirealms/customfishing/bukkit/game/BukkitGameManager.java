@@ -174,7 +174,6 @@ public class BukkitGameManager implements GameManager {
         return GameBasics.builder()
                 .difficulty(MathValue.auto(section.get("difficulty", "20~80"), true))
                 .time(MathValue.auto(section.get("time", 15), true))
-                .preGameAnimation(PreGameAnimation.parse(section, "pre-minigame-title"))
                 .build();
     }
 
@@ -1240,6 +1239,15 @@ public class BukkitGameManager implements GameManager {
                 private final String tip = section.getString("tip");
                 private final MovementTrackSet fishMovement = MovementTrackSet.parse(section.getSection("fish-movement"));
 
+                // The bite animation that plays before the game proper. Kept inside this game
+                // type on purpose: it is the only one that wants it, so there is no reason to
+                // widen GameBasics or to hand the hook a second GamingPlayer for it.
+                // frame-time is counted in this game's own ticks (TICK_MS), not in 50ms ticks.
+                private final String[] introFrames = section.getStringList("pre-minigame-title.frames").toArray(new String[0]);
+                private final int introFrameTime = Math.max(1, section.getInt("pre-minigame-title.frame-time", 3));
+                private final int introLoops = Math.max(1, section.getInt("pre-minigame-title.loops", 1));
+                private final int introTicks = introFrames.length * introFrameTime * introLoops;
+
                 @Override
                 public BiFunction<CustomFishingHook, GameSetting, AbstractGamingPlayer> gamingPlayerProvider() {
                     return (hook, settings) -> new AbstractGamingPlayer(hook, settings) {
@@ -1252,6 +1260,7 @@ public class BukkitGameManager implements GameManager {
                         private final double judgementRange = Math.max(0, barEffectiveHeight - judgementAreaHeight);
                         private final double indicatorRange = Math.max(0, barEffectiveHeight - indicatorHeight);
 
+                        private int introTick;
                         private long startTime;
                         private double judgementPosition;
                         private double judgementVelocity;
@@ -1264,11 +1273,20 @@ public class BukkitGameManager implements GameManager {
 
                         @Override
                         public void arrangeTask() {
+                            // The intro is not part of the player's time budget: push the deadline
+                            // back by however long it runs, so the countdown starts on the first
+                            // frame the player can actually act on.
+                            this.deadline += introTicks * TICK_MS;
                             this.task = plugin.getScheduler().asyncRepeating(this, 50, TICK_MS, TimeUnit.MILLISECONDS);
                         }
 
                         @Override
                         protected void tick() {
+                            if (inIntro()) {
+                                showIntroFrame();
+                                introTick++;
+                                return;
+                            }
                             if (!started) start();
 
                             if (isPulling()) pull(); else sink();
@@ -1295,9 +1313,27 @@ public class BukkitGameManager implements GameManager {
                             showUI();
                         }
 
+                        /** True while the bite animation is still playing and input is ignored. */
+                        private boolean inIntro() {
+                            return introTick < introTicks;
+                        }
+
+                        /** One frame of the bite animation, drawn as the title with no subtitle. */
+                        private void showIntroFrame() {
+                            String frame = introFrames[(introTick / introFrameTime) % introFrames.length];
+                            SparrowHeart.getInstance().sendTitle(
+                                    getPlayer(),
+                                    AdventureHelper.miniMessageToJson(
+                                            font == null ? frame : AdventureHelper.surroundWithMiniMessageFont(frame, font)),
+                                    null,
+                                    0, 20, 0
+                            );
+                        }
+
                         /**
-                         * Deferred to the first tick: {@link #arrangeTask()} runs from the
-                         * superclass constructor, before this instance's fields exist.
+                         * Deferred to the first tick after the intro: {@link #arrangeTask()} runs
+                         * from the superclass constructor, before this instance's fields exist,
+                         * and the fish must only start swimming once the player can react.
                          */
                         private void start() {
                             started = true;
@@ -1358,11 +1394,13 @@ public class BukkitGameManager implements GameManager {
 
                         @Override
                         public void handleRightClick() {
+                            if (inIntro()) return;
                             if (control.equals("right-click")) impulse();
                         }
 
                         @Override
                         public boolean handleLeftClick() {
+                            if (inIntro()) return false;
                             if (control.equals("left-click")) impulse();
                             return false;
                         }
