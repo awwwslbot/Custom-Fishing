@@ -25,6 +25,8 @@ import net.momirealms.customfishing.api.mechanic.context.ContextKeys;
 import net.momirealms.customfishing.api.mechanic.effect.Effect;
 import net.momirealms.customfishing.api.mechanic.fishing.CustomFishingHook;
 import net.momirealms.customfishing.api.mechanic.game.*;
+import net.momirealms.customfishing.api.mechanic.game.movement.MovementTrack;
+import net.momirealms.customfishing.api.mechanic.game.movement.MovementTrackSet;
 import net.momirealms.customfishing.api.mechanic.loot.operation.WeightOperation;
 import net.momirealms.customfishing.api.mechanic.misc.value.MathValue;
 import net.momirealms.customfishing.api.mechanic.misc.value.TextValue;
@@ -1211,38 +1213,228 @@ public class BukkitGameManager implements GameManager {
                 private final int judgementAreaOffset = section.getInt("subtitle.judgement-area-offset");
                 private final int indicatorImageWidth = section.getInt("subtitle.fish-indicator-width");
                 private final int indicatorImageOffset = section.getInt("subtitle.fish-indicator-offset");
+                // The progress slot on the right of the bar. Optional: leave unset to skip it.
+                private final String progressBarImage = section.getString("subtitle.progress-bar");
+                private final int progressBarWidth = section.getInt("subtitle.progress-bar-width");
+                private final int progressBarOffset = section.getInt("subtitle.progress-bar-offset");
+                private final int progressBarHeight = section.getInt("arguments.progress-bar-height");
 
                 private final int indicatorHeight = section.getInt("arguments.indicator-height");
                 private final int barEffectiveHeight = section.getInt("arguments.bar-height");
                 private final int judgementAreaHeight = section.getInt("arguments.judgment-area-height");
+
+                // The judgement area is the player controlled part: it sinks on its own and
+                // is pushed back up by input, exactly like the fish in hold_v2 but vertical.
+                private final double pullingStrength = section.getDouble("arguments.pulling-strength", 0.9);
+                private final double looseningLoss = section.getDouble("arguments.loosening-strength-loss", 0.35);
+                private final double waterResistance = section.getDouble("arguments.water-resistance", 0.12);
+                private final double terminalVelocity = section.getDouble("arguments.terminal-velocity", looseningLoss * 10);
+                private final double punishment = section.getDouble("arguments.punishment", 0.2);
+                private final boolean elasticity = section.getBoolean("arguments.elasticity", false);
+                private final double elasticityPower = section.getDouble("arguments.elasticity-power", 0.7);
+                private final String control = section.getString("control", "sneak");
+                private final int[] timeRequirements = section.getIntList("hold-time-requirements").stream().mapToInt(Integer::intValue).toArray();
+                private final String[] progress = section.getStringList("progress").toArray(new String[0]);
+                private final TextValue<Player> title = TextValue.auto(section.getString("title", ""));
+                private final String tip = section.getString("tip");
+                private final MovementTrackSet fishMovement = MovementTrackSet.parse(section.getSection("fish-movement"));
+
+                // The bite animation that plays before the game proper. Kept inside this game
+                // type on purpose: it is the only one that wants it, so there is no reason to
+                // widen GameBasics or to hand the hook a second GamingPlayer for it.
+                // frame-time is counted in this game's own ticks (TICK_MS), not in 50ms ticks.
+                private final String[] introFrames = section.getStringList("pre-minigame-title.frames").toArray(new String[0]);
+                private final int introFrameTime = Math.max(1, section.getInt("pre-minigame-title.frame-time", 3));
+                private final int introLoops = Math.max(1, section.getInt("pre-minigame-title.loops", 1));
+                private final int introTicks = introFrames.length * introFrameTime * introLoops;
+
                 @Override
                 public BiFunction<CustomFishingHook, GameSetting, AbstractGamingPlayer> gamingPlayerProvider() {
                     return (hook, settings) -> new AbstractGamingPlayer(hook, settings) {
-                        private int tick = 0;
+
+                        private static final long TICK_MS = 33;
+
+                        private final MovementTrack track = fishMovement == null ? null : fishMovement.pick();
+                        private final int timeRequirement = (timeRequirements.length == 0 ? 3 : timeRequirements[ThreadLocalRandom.current().nextInt(timeRequirements.length)]) * 1000;
+
+                        private final double judgementRange = Math.max(0, barEffectiveHeight - judgementAreaHeight);
+                        private final double indicatorRange = Math.max(0, barEffectiveHeight - indicatorHeight);
+
+                        private int introTick;
+                        private long startTime;
+                        private double judgementPosition;
+                        private double judgementVelocity;
+                        private double fishPosition;
+                        private double holdTime;
+                        private boolean started;
+                        private boolean played;
+                        private boolean flawless;
+                        private boolean everCaught;
+
+                        @Override
+                        public void arrangeTask() {
+                            // The intro is not part of the player's time budget: push the deadline
+                            // back by however long it runs, so the countdown starts on the first
+                            // frame the player can actually act on.
+                            this.deadline += introTicks * TICK_MS;
+                            this.task = plugin.getScheduler().asyncRepeating(this, 50, TICK_MS, TimeUnit.MILLISECONDS);
+                        }
+
                         @Override
                         protected void tick() {
-                            tick++;
-                            if(tick > 100) {
-                                setGameResult(GameResult.success());
+                            if (inIntro()) {
+                                showIntroFrame();
+                                introTick++;
+                                return;
+                            }
+                            if (!started) start();
+
+                            if (isPulling()) pull(); else sink();
+                            judgementPosition += judgementVelocity;
+                            calibrate();
+                            fishPosition = fishAt(System.currentTimeMillis() - startTime);
+
+                            if (isCaught()) {
+                                everCaught = true;
+                                holdTime += TICK_MS;
+                            } else {
+                                // Only start holding the player to a perfect run once they have
+                                // actually latched on; the fish rarely starts inside the area.
+                                if (everCaught) flawless = false;
+                                holdTime -= punishment * TICK_MS;
+                            }
+
+                            if (holdTime >= timeRequirement) {
+                                setGameResult(flawless ? GameResult.perfect() : GameResult.success());
                                 endGame();
                                 return;
                             }
+                            holdTime = Math.clamp(holdTime, 0, timeRequirement);
                             showUI();
+                        }
+
+                        /** True while the bite animation is still playing and input is ignored. */
+                        private boolean inIntro() {
+                            return introTick < introTicks;
+                        }
+
+                        /** One frame of the bite animation, drawn as the title with no subtitle. */
+                        private void showIntroFrame() {
+                            String frame = introFrames[(introTick / introFrameTime) % introFrames.length];
+                            SparrowHeart.getInstance().sendTitle(
+                                    getPlayer(),
+                                    AdventureHelper.miniMessageToJson(
+                                            font == null ? frame : AdventureHelper.surroundWithMiniMessageFont(frame, font)),
+                                    null,
+                                    0, 20, 0
+                            );
+                        }
+
+                        /**
+                         * Deferred to the first tick after the intro: {@link #arrangeTask()} runs
+                         * from the superclass constructor, before this instance's fields exist,
+                         * and the fish must only start swimming once the player can react.
+                         */
+                        private void start() {
+                            started = true;
+                            flawless = true;
+                            startTime = System.currentTimeMillis();
+                            fishPosition = fishAt(0);
+                            // Centre the area on the fish so a perfect run is actually reachable.
+                            judgementPosition = Math.clamp(
+                                    fishPosition + (indicatorHeight - judgementAreaHeight) / 2d, 0, judgementRange);
+                        }
+
+                        private double fishAt(long elapsedMillis) {
+                            double normalized = track == null ? 0.5 : track.valueAt(elapsedMillis / 1000d);
+                            return Math.clamp(normalized, 0, 1) * indicatorRange;
+                        }
+
+                        /** True while the player is actively lifting the judgement area. */
+                        private boolean isPulling() {
+                            return control.equals("sneak") && getPlayer().isSneaking();
+                        }
+
+                        private void pull() {
+                            played = true;
+                            judgementVelocity -= pullingStrength;
+                        }
+
+                        private void sink() {
+                            judgementVelocity += looseningLoss;
+                        }
+
+                        /** Linear drag towards a standstill, then a terminal speed cap. */
+                        private void calibrate() {
+                            if (judgementVelocity > 0) {
+                                judgementVelocity = Math.max(0, judgementVelocity - waterResistance);
+                            } else {
+                                judgementVelocity = Math.min(0, judgementVelocity + waterResistance);
+                            }
+                            judgementVelocity = Math.clamp(judgementVelocity, -terminalVelocity, terminalVelocity);
+
+                            if (judgementPosition < 0) {
+                                judgementPosition = 0;
+                                judgementVelocity = elasticity ? -judgementVelocity * elasticityPower : 0;
+                            } else if (judgementPosition > judgementRange) {
+                                judgementPosition = judgementRange;
+                                judgementVelocity = elasticity ? -judgementVelocity * elasticityPower : 0;
+                            }
+                        }
+
+                        /**
+                         * The fish counts as caught while its centre sits inside the judgement
+                         * area. Centre containment rather than full containment, because the
+                         * smaller judgement area sprites are shorter than the fish itself.
+                         */
+                        private boolean isCaught() {
+                            double fishCentre = fishPosition + indicatorHeight / 2d;
+                            return fishCentre >= judgementPosition && fishCentre <= judgementPosition + judgementAreaHeight;
                         }
 
                         @Override
                         public void handleRightClick() {
+                            if (inIntro()) return;
+                            if (control.equals("right-click")) impulse();
+                        }
 
+                        @Override
+                        public boolean handleLeftClick() {
+                            if (inIntro()) return false;
+                            if (control.equals("left-click")) impulse();
+                            return false;
+                        }
+
+                        private void impulse() {
+                            played = true;
+                            judgementVelocity = -pullingStrength;
                         }
 
                         private void showUI() {
+                            int judgementV = (int) Math.round(Math.clamp(judgementPosition, 0, judgementRange));
+                            int fishV = (int) Math.round(Math.clamp(fishPosition, 0, indicatorRange));
                             String bar = OffsetUtils.getOffsetChars(barImageOffset)
                                     + AdventureHelper.surroundWithMiniMessageFont(barImage, font)
                                     + OffsetUtils.getOffsetChars(judgementAreaOffset - barImageWidth - barImageOffset)
-                                    + AdventureHelper.surroundWithMiniMessageFont(judgementAreaImage, font)
+                                    + AdventureHelper.surroundWithMiniMessageFont(judgementAreaImage.replace("{v}", String.valueOf(judgementV)), font)
                                     + OffsetUtils.getOffsetChars(indicatorImageOffset - judgementAreaWidth - judgementAreaOffset)
-                                    + AdventureHelper.surroundWithMiniMessageFont(indicatorImage, font);
-                            SparrowHeart.getInstance().sendTitle(getPlayer(), null, AdventureHelper.miniMessageToJson(bar), 0, 20, 0);
+                                    + AdventureHelper.surroundWithMiniMessageFont(indicatorImage.replace("{v}", String.valueOf(fishV)), font);
+                            if (progressBarImage != null) {
+                                int filled = (int) Math.round(Math.clamp(holdTime / timeRequirement, 0, 1) * progressBarHeight);
+                                bar += OffsetUtils.getOffsetChars(progressBarOffset - indicatorImageWidth - indicatorImageOffset)
+                                        + AdventureHelper.surroundWithMiniMessageFont(progressBarImage.replace("{p}", String.valueOf(filled)), font);
+                            }
+                            if (progress.length != 0) {
+                                int step = (int) ((holdTime / timeRequirement) * progress.length);
+                                hook.getContext().arg(ContextKeys.PROGRESS, progress[Math.clamp(step, 0, progress.length - 1)]);
+                            }
+                            String header = tip != null && !played ? tip : title.render(hook.getContext());
+                            SparrowHeart.getInstance().sendTitle(
+                                    getPlayer(),
+                                    header.isEmpty() ? null : AdventureHelper.miniMessageToJson(header),
+                                    AdventureHelper.miniMessageToJson(bar),
+                                    0, 20, 0
+                            );
                         }
                     };
                 }
