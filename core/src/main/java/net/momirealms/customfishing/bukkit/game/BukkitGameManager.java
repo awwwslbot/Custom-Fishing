@@ -1205,23 +1205,28 @@ public class BukkitGameManager implements GameManager {
             return new AbstractGame(id, basics) {
                 private final String font = section.getString("subtitle.font");
                 private final String barImage = section.getString("subtitle.bar");
-                private final String judgementAreaImage = section.getString("subtitle.judgement-area");
-                private final String indicatorImage = section.getString("subtitle.fish-indicator");
-                private final int barImageWidth = section.getInt("subtitle.bar-width");
-                private final int barImageOffset = section.getInt("subtitle.bar-offset");
-                private final int judgementAreaWidth = section.getInt("subtitle.judgement-area-width");
-                private final int judgementAreaOffset = section.getInt("subtitle.judgement-area-offset");
-                private final int indicatorImageWidth = section.getInt("subtitle.fish-indicator-width");
-                private final int indicatorImageOffset = section.getInt("subtitle.fish-indicator-offset");
-                // The progress slot on the right of the bar. Optional: leave unset to skip it.
-                private final String progressBarImage = section.getString("subtitle.progress-bar");
-                private final int progressBarWidth = section.getInt("subtitle.progress-bar-width");
-                private final int progressBarOffset = section.getInt("subtitle.progress-bar-offset");
-                private final int progressBarHeight = section.getInt("arguments.progress-bar-height");
+                private final int offset = section.getInt("subtitle.offset");
+                private final String judgementAreaImage = section.getString("subtitle.judgement-area.image");
+                private final int judgementAreaMax = section.getInt("subtitle.judgement-area.max");
+                private final boolean judgementAreaReversed = section.getBoolean("subtitle.judgement-area.reversed", false);
+                private final int judgementAreaImageOffset = section.getInt("subtitle.judgement-area.offset");
+                private final String indicatorImage = section.getString("subtitle.fish-indicator.image");
+                private final int indicatorImageOffset = section.getInt("subtitle.fish-indicator.offset");
+                private final int indicatorMax = section.getInt("subtitle.fish-indicator.max");
+                private final boolean indicatorReversed = section.getBoolean("subtitle.fish-indicator.reversed", false);
+                // The progress slot on the right of the bar. Optional: leave the section out to hide it.
+                private final String progressBarImage = section.getString("subtitle.progress-bar.image");
+                private final int progressBarImageOffset = section.getInt("subtitle.progress-bar.offset");
+                private final int progressBarMax = section.getInt("subtitle.progress-bar.max");
+                private final boolean progressBarReversed = section.getBoolean("subtitle.progress-bar.reversed", false);
 
                 private final int indicatorHeight = section.getInt("arguments.indicator-height");
-                private final int barEffectiveHeight = section.getInt("arguments.bar-height");
                 private final int judgementAreaHeight = section.getInt("arguments.judgment-area-height");
+
+                private final int barHeight = section.getInt("arguments.bar-height");
+                private final int barPaddingTop = section.getInt("arguments.bar-padding-top", 0);
+                private final int barPaddingBottom = section.getInt("arguments.bar-padding-bottom", 0);
+                private final int barEffectiveHeight = Math.max(0, barHeight - barPaddingTop - barPaddingBottom);
 
                 // The judgement area is the player controlled part: it sinks on its own and
                 // is pushed back up by input, exactly like the fish in hold_v2 but vertical.
@@ -1410,19 +1415,30 @@ public class BukkitGameManager implements GameManager {
                             judgementVelocity = -pullingStrength;
                         }
 
+                        /**
+                         * Maps a logic value in [0, range] into a sprite's {v} range [0, max].
+                         * Forward direction: 0 = lowest, max = highest; reversed flips it.
+                         */
+                        private int interpolate(double value, double range, int max, boolean reversed) {
+                            if (range <= 0 || max <= 0) return 0;
+                            double fraction = Math.clamp(value / range, 0, 1);
+                            if (reversed) fraction = 1 - fraction;
+                            return (int) Math.round(fraction * max);
+                        }
+
                         private void showUI() {
-                            int judgementV = (int) Math.round(Math.clamp(judgementPosition, 0, judgementRange));
-                            int fishV = (int) Math.round(Math.clamp(fishPosition, 0, indicatorRange));
-                            String bar = OffsetUtils.getOffsetChars(barImageOffset)
+                            int judgementV = interpolate(judgementPosition, judgementRange, judgementAreaMax, judgementAreaReversed);
+                            int fishV = interpolate(fishPosition, indicatorRange, indicatorMax, indicatorReversed);
+                            String bar = OffsetUtils.getOffsetChars(offset)
                                     + AdventureHelper.surroundWithMiniMessageFont(barImage, font)
-                                    + OffsetUtils.getOffsetChars(judgementAreaOffset - barImageWidth - barImageOffset)
+                                    + OffsetUtils.getOffsetChars(judgementAreaImageOffset)
                                     + AdventureHelper.surroundWithMiniMessageFont(judgementAreaImage.replace("{v}", String.valueOf(judgementV)), font)
-                                    + OffsetUtils.getOffsetChars(indicatorImageOffset - judgementAreaWidth - judgementAreaOffset)
+                                    + OffsetUtils.getOffsetChars(indicatorImageOffset)
                                     + AdventureHelper.surroundWithMiniMessageFont(indicatorImage.replace("{v}", String.valueOf(fishV)), font);
                             if (progressBarImage != null) {
-                                int filled = (int) Math.round(Math.clamp(holdTime / timeRequirement, 0, 1) * progressBarHeight);
-                                bar += OffsetUtils.getOffsetChars(progressBarOffset - indicatorImageWidth - indicatorImageOffset)
-                                        + AdventureHelper.surroundWithMiniMessageFont(progressBarImage.replace("{p}", String.valueOf(filled)), font);
+                                int progressV = interpolate(holdTime, timeRequirement, progressBarMax, progressBarReversed);
+                                bar += OffsetUtils.getOffsetChars(progressBarImageOffset);
+                                bar += AdventureHelper.surroundWithMiniMessageFont(progressBarImage.replace("{v}", String.valueOf(progressV)), font);
                             }
                             if (progress.length != 0) {
                                 int step = (int) ((holdTime / timeRequirement) * progress.length);
