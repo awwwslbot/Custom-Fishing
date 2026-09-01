@@ -19,7 +19,10 @@ package net.momirealms.customfishing.api.util;
 
 import dev.dejvokep.boostedyaml.block.implementation.Section;
 import net.momirealms.customfishing.common.helper.AdventureHelper;
+import net.momirealms.customfishing.common.locale.CustomFishingCaptionFormatter;
+import net.momirealms.customfishing.common.plugin.CustomFishingPlugin;
 import org.jetbrains.annotations.ApiStatus;
+import org.slf4j.LoggerFactory;
 
 /**
  * Utility class for generating offset characters based on a font configuration.
@@ -165,6 +168,7 @@ public class OffsetUtils {
      * @return Offset characters as a string.
      */
     public static String getOffsetChars(int n) {
+        if(n == 0) return "";
         if (n > 0) {
             return AdventureHelper.surroundWithMiniMessageFont(getShortestPosChars(n), font);
         } else {
